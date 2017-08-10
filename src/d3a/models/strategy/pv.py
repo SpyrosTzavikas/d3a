@@ -45,8 +45,6 @@ class PVStrategy(BaseStrategy):
         if rounded_energy_price == 0.0:
             # Initial selling offer
             rounded_energy_price = 29.9
-        # Debugging print
-        # print('rounded_energy_price is %s' % rounded_energy_price)
         # Iterate over all markets open in the future
         for (time, market) in self.area.markets.items():
             # If there is no offer for a currently open marketplace:
@@ -81,7 +79,7 @@ class PVStrategy(BaseStrategy):
 
     def produced_energy_forecast_real_data(self):
         # This forecast ist based on the real PV system data provided by enphase
-        # They can be found in the tools folder
+        # They can be found in the .../tools folder
         # A fit of a gaussian function to those data results in a formula Energy(time)
         for slot_time in [
                     self.area.now + (self.area.config.slot_length * i)
