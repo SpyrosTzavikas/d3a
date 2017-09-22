@@ -57,6 +57,7 @@ class PVStrategy(BaseStrategy):
                         continue
                     remaining_energy = self.energy_production_forecast[time]
                     for i in range(self.panel_count):
+                        # Splitting the amount of available energy in offer with 10Wh each
                         while remaining_energy > 0.01:
                             offer = market.offer(
                                 (min(rounded_energy_price, 29.9)) *
