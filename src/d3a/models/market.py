@@ -237,6 +237,10 @@ class Market:
         return sorted(self.offers.values(), key=lambda o: o.price / o.energy)
 
     @property
+    def cheapest_offers(self):
+        return sorted(self.offers.values(), key=lambda o: o.price)
+
+    @property
     def _now(self):
         if self.area:
             return self.area.now
