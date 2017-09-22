@@ -61,8 +61,8 @@ class PVStrategy(BaseStrategy):
                         while remaining_energy > 0.01:
                             offer = market.offer(
                                 (min(rounded_energy_price, 29.9)) *
-                                10,
-                                10,
+                                0.01,
+                                0.01,
                                 self.owner.name
                             )
                             remaining_energy -= 0.01
