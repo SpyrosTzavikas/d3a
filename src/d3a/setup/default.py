@@ -3,6 +3,7 @@ from d3a.models.appliance.pv import PVAppliance
 from d3a.models.appliance.simple import SimpleAppliance
 from d3a.models.appliance.switchable import SwitchableAppliance
 from d3a.models.area import Area
+from d3a.models.strategy.balancingtrader import BalancingtraderStrategy
 from d3a.models.strategy.commercial_producer import CommercialStrategy
 from d3a.models.strategy.e_car import ECarStrategy
 from d3a.models.strategy.fridge import FridgeStrategy
@@ -32,6 +33,8 @@ def get_setup(config):
                             Area('S1 H1 Heatpump', strategy=HeatPumpStrategy(20),
                                  appliance=SimpleAppliance()),
                             Area('S1 H1 Storage', strategy=StorageStrategy(80),
+                                 appliance=SimpleAppliance()),
+                            Area('S1 H1 Balancing', strategy=BalancingtraderStrategy(),
                                  appliance=SimpleAppliance()),
                         ]
                     ),

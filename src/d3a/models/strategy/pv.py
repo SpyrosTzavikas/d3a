@@ -65,7 +65,7 @@ class PVStrategy(BaseStrategy):
                                 10,
                                 self.owner.name
                             )
-                            remaining_energy -= 10
+                            remaining_energy -= 0.01
                             self.offers_posted[offer.id] = market
                         # Offer the remaining energy
                         offer = market.offer(
