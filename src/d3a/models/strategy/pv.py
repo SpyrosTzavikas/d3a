@@ -55,11 +55,22 @@ class PVStrategy(BaseStrategy):
                 try:
                     if self.energy_production_forecast[time] == 0:
                         continue
+                    remaining_energy = self.energy_production_forecast[time]
                     for i in range(self.panel_count):
+                        while remaining_energy > 0.01:
+                            offer = market.offer(
+                                (min(rounded_energy_price, 29.9)) *
+                                10,
+                                10,
+                                self.owner.name
+                            )
+                            remaining_energy -= 10
+                            self.offers_posted[offer.id] = market
+                        # Offer the remaining energy
                         offer = market.offer(
                             (min(rounded_energy_price, 29.9)) *
-                            self.energy_production_forecast[time],
-                            self.energy_production_forecast[time],
+                            remaining_energy,
+                            remaining_energy,
                             self.owner.name
                         )
                         self.offers_posted[offer.id] = market
