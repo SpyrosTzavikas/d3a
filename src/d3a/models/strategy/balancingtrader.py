@@ -54,9 +54,6 @@ class BalancingtraderStrategy(BaseStrategy):
                         self.accept_offer(offer=cheapest_offer, market=market)
                         self.bought_energy[market] = (bought_energy + cheapest_offer.energy,
                                                       spent_money + cheapest_offer.price)
-                        self.log.error(
-                            "Balancetrader bought %s while the trade vol. was %s on market %s",
-                            self.bought_energy[market], total_trading_volume, market.time_slot)
                         needed_balancing_energy -= cheapest_offer.energy
                         continue
                     except MarketException:
@@ -70,9 +67,6 @@ class BalancingtraderStrategy(BaseStrategy):
                         self.accept_offer(offer=cheapest_offer, market=market)
                         self.bought_energy[market] = (bought_energy + cheapest_offer.energy,
                                                       spent_money + cheapest_offer.price)
-                        self.log.error(
-                            "Balancetrader bought %s while the trade vol. was %s on market %s",
-                            self.bought_energy[market], total_trading_volume, market.time_slot)
                         return
                     except MarketException:
                         # Offer already gone etc., try next one.
