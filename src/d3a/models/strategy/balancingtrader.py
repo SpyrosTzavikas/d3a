@@ -36,19 +36,19 @@ class BalancingtraderStrategy(BaseStrategy):
                 if t.buyer != self.owner.name:
                     total_trading_volume += t.offer.energy
 
-            for cheapest_offer in market.sorted_offers:
-                # If there are no values in the dict for the key "markets"
-                # it raises an value error
-                try:
-                    bought_energy, spent_money = self.bought_energy[market]
-                except ValueError:
-                    bought_energy, spent_money = 0, 0
+            # If there are no values in the dict for the key "markets"
+            # it raises an value error
+            try:
+                bought_energy, spent_money = self.bought_energy[market]
+            except ValueError:
+                bought_energy, spent_money = 0, 0
 
-                if bought_energy > (total_trading_volume * 0.15):
-                    return
-                else:
-                    needed_balancing_energy -= bought_energy
+            if bought_energy > (total_trading_volume * 0.15):
+                return
+            else:
+                needed_balancing_energy -= bought_energy
 
+            for cheapest_offer in market.cheapest_offers:
                 if cheapest_offer.energy < needed_balancing_energy:
                     try:
                         self.accept_offer(offer=cheapest_offer, market=market)
@@ -58,11 +58,11 @@ class BalancingtraderStrategy(BaseStrategy):
                         continue
                     except MarketException:
                         # Offer already gone etc., try next one.
-                        self.log.exception("Couldn't buy")
+                        self.log.exception("Couldn't buy - co < nbe")
                         continue
 
-                if ((total_trading_volume * 0.15) - bought_energy) > \
-                        cheapest_offer.energy > needed_balancing_energy:
+                if (((total_trading_volume * 0.15) - bought_energy) >
+                        cheapest_offer.energy > needed_balancing_energy):
                     try:
                         self.accept_offer(offer=cheapest_offer, market=market)
                         self.bought_energy[market] = (bought_energy + cheapest_offer.energy,
@@ -70,7 +70,7 @@ class BalancingtraderStrategy(BaseStrategy):
                         return
                     except MarketException:
                         # Offer already gone etc., try next one.
-                        self.log.exception("Couldn't buy")
+                        self.log.exception("Couldn't buy - co > nbe")
                         continue
 
                 else:
