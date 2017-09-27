@@ -12,16 +12,16 @@ from slugify import slugify
 from d3a.exceptions import AreaException
 from d3a.models.appliance.base import BaseAppliance
 from d3a.models.appliance.inter_area import InterAreaAppliance
+from d3a.models.appliance.simple import SimpleAppliance
 from d3a.models.config import SimulationConfig
 from d3a.models.events import AreaEvent, MarketEvent, TriggerMixin
 from d3a.models.market import Market
+from d3a.models.strategy.balancingtrader import BalancingtraderStrategy
 from d3a.models.strategy.base import BaseStrategy
 from d3a.models.strategy.inter_area import InterAreaAgent
 from d3a.util import TaggedLogWrapper
 
-
 log = getLogger(__name__)
-
 
 DEFAULT_CONFIG = SimulationConfig(
     duration=Interval(hours=24),
@@ -53,6 +53,7 @@ class Area:
         self.markets = OrderedDict()  # type: Dict[Pendulum, Market]
         # Past markets
         self.past_markets = OrderedDict()  # type: Dict[Pendulum, Market]
+        self.balancing_energy = defaultdict(float)  # type: Dict[Market, float]
 
     def activate(self):
         for attr, kind in [(self.strategy, 'Strategy'), (self.appliance, 'Appliance')]:
@@ -75,6 +76,14 @@ class Area:
 
         if not self.strategy and self.parent is not None:
             self.log.warning("No strategy. Using inter area agent.")
+            # Adding Balancingtrader to Area
+            # Only Add Balancingtrader on House level (where the area children are strategies)
+            if all(child.strategy is not None for child in self.children):
+                balancetrader = Area('BT %s' % self.name, strategy=BalancingtraderStrategy(),
+                                     appliance=SimpleAppliance())
+                balancetrader.parent = self
+                self.children.append(balancetrader)
+        # TODO I get a offer not found error which shouldn't be the case
         self.log.info('Activating area')
         self.active = True
         self._broadcast_notification(AreaEvent.ACTIVATE)
@@ -154,7 +163,7 @@ class Area:
             (m.min_trade_price, m.max_trade_price)
             for markets in (self.past_markets, self.markets)
             for m in markets.values()
-        ]
+            ]
         return (
             min(p[0] for p in min_max_prices),
             max(p[1] for p in min_max_prices)
@@ -284,8 +293,25 @@ class Area:
         if time is None:
             time = self.now
         slot = market.time_slot
+        if market not in self.balancing_energy:
+            for t in market.trades:
+                if t.buyer.startswith("BT "):
+                    self.balancing_energy[market] += t.offer.energy
+
         if slot in self.markets or slot in self.past_markets:
             market.actual_energy[time][reporter] += value
+            # If energy is missing the reported value is negative
+            if self.balancing_energy[market] >= -value:
+                # TODO self.name needs to be replaced with sth. that reffers to the
+                #  BalancingtraderStrategy
+                market.actual_energy[time][self.name] -= value
+                # If energy is missing the reported value is negative
+                self.balancing_energy[market] += value
+            else:
+                # We can neglect less than 50Wh Balancing Energy
+                if value > 0.05:
+                    self.log.error("Blyat, need to balance %s kWh but I only have %s kWh "
+                                   "Balancing Energy left", value, self.balancing_energy[market])
         else:
             raise RuntimeError("Reporting energy for unknown market")
 
