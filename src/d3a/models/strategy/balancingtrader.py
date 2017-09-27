@@ -49,6 +49,8 @@ class BalancingtraderStrategy(BaseStrategy):
                 needed_balancing_energy -= bought_energy
 
             for cheapest_offer in market.cheapest_offers:
+                # FIXME: For any reason does the  accept_offer function in this loop cause an
+                # FIXME: OfferNotFoundException - Idea: The offer is already traded or deleted
                 if cheapest_offer.energy < needed_balancing_energy:
                     try:
                         self.accept_offer(offer=cheapest_offer, market=market)
