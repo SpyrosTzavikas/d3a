@@ -8,14 +8,14 @@ from d3a.models.strategy.const import ConstSettings
 
 
 device_registry_dict = {
-    "H1 General Load": (22, 25),
+    "H1 General Load": (32, 35),
 }
 
 
 def get_setup(config):
     DeviceRegistry.REGISTRY = device_registry_dict
-    ConstSettings.BALANCING_FLEXIBLE_LOADS_SUPPORT = False
-    ConstSettings.ENABLE_BALANCING_MARKET = True
+    ConstSettings.BalancingSettings.FLEXIBLE_LOADS_SUPPORT = False
+    ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET = True
 
     area = Area(
         'Grid',

@@ -32,9 +32,9 @@ DEFAULT_CONFIG = SimulationConfig(
     market_count=1,
     slot_length=duration(minutes=15),
     tick_length=duration(seconds=1),
-    cloud_coverage=ConstSettings.DEFAULT_PV_POWER_PROFILE,
-    market_maker_rate=str(ConstSettings.DEFAULT_MARKET_MAKER_RATE),
-    iaa_fee=ConstSettings.INTER_AREA_AGENT_FEE_PERCENTAGE
+    cloud_coverage=ConstSettings.PVSettings.DEFAULT_POWER_PROFILE,
+    market_maker_rate=str(ConstSettings.GeneralSettings.DEFAULT_MARKET_MAKER_RATE),
+    iaa_fee=ConstSettings.IAASettings.FEE_PERCENTAGE
 )
 
 
@@ -46,7 +46,7 @@ class Area:
                  appliance: BaseAppliance = None,
                  config: SimulationConfig = None,
                  budget_keeper=None,
-                 balancing_spot_trade_ratio=ConstSettings.BALANCING_SPOT_TRADE_RATIO):
+                 balancing_spot_trade_ratio=ConstSettings.BalancingSettings.SPOT_TRADE_RATIO):
         self.balancing_spot_trade_ratio = balancing_spot_trade_ratio
         self.active = False
         self.log = TaggedLogWrapper(log, name)
@@ -60,9 +60,9 @@ class Area:
         for child in self.children:
             child.parent = self
         self.inter_area_agents = \
-            defaultdict(list)  # type: Dict[Market, List[InterAreaAgent]]
+            defaultdict(list)  # type: Dict[DateTime, List[InterAreaAgent]]
         self.balancing_agents = \
-            defaultdict(list)  # type: Dict[BalancingMarket, List[BalancingAgent]]
+            defaultdict(list)  # type: Dict[DateTime, List[BalancingAgent]]
         self.strategy = strategy
         self.appliance = appliance
         self._config = config
@@ -72,7 +72,7 @@ class Area:
             self.budget_keeper.area = self
         # Children trade in `markets`
         self.markets = OrderedDict()  # type: Dict[DateTime, Market]
-        self.balancing_markets = OrderedDict()  # type: Dict[DateTime, BalancingMarket]
+        self.balancing_markets = OrderedDict()  # type: Dict[DateTime, BalancingMar
         # Past markets
         self.past_markets = OrderedDict()  # type: Dict[DateTime, Market]
         self.past_balancing_markets = OrderedDict()  # type: Dict[DateTime, BalancingMarket]
@@ -130,6 +130,12 @@ class Area:
         """Returns the 'current' market (i.e. the one currently 'running')"""
         try:
             return list(self.markets.values())[0]
+        except IndexError:
+            return None
+
+    def get_future_market_from_id(self, _id):
+        try:
+            return [m for m in self.markets.values() if m.id == _id][0]
         except IndexError:
             return None
 
@@ -280,7 +286,13 @@ class Area:
                                               agent_class=InterAreaAgent,
                                               market_class=Market)
 
-        if ConstSettings.ENABLE_BALANCING_MARKET and len(DeviceRegistry.REGISTRY.keys()) != 0:
+        # Force market cycle event in case this is the first market slot
+        if (changed or len(self.past_markets.keys()) == 0) and _trigger_event:
+            self._broadcast_notification(AreaEvent.MARKET_CYCLE)
+        if not ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET:
+            return
+        if ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET and \
+                len(DeviceRegistry.REGISTRY.keys()) != 0:
             changed_balancing_market = \
                 self._create_future_markets(current_time=self.now, markets=self.balancing_markets,
                                             parent=self.parent,
@@ -291,13 +303,8 @@ class Area:
                                             if self.parent is not None else None,
                                             agent_class=BalancingAgent,
                                             market_class=BalancingMarket)
-
-        # Force market cycle event in case this is the first market slot
-        if (changed or len(self.past_markets.keys()) == 0) and _trigger_event:
-            self._broadcast_notification(AreaEvent.MARKET_CYCLE)
-
-        if not ConstSettings.ENABLE_BALANCING_MARKET:
-            return
+        else:
+            changed_balancing_market = None
 
         # Force balancing_market cycle event in case this is the first market slot
         if (changed_balancing_market or len(self.past_balancing_markets.keys()) == 0) \
@@ -352,16 +359,16 @@ class Area:
         for child in sorted(self.children, key=lambda _: random()):
             child.event_listener(event_type, **kwargs)
         # Also broadcast to IAAs. Again in random order
-        for market, agents in self.inter_area_agents.items():
-            if market.time_slot not in self.markets:
+        for time_slot, agents in self.inter_area_agents.items():
+            if time_slot not in self.markets:
                 # exclude past IAAs
                 continue
 
             for agent in sorted(agents, key=lambda _: random()):
                 agent.event_listener(event_type, **kwargs)
         # Also broadcast to BAs. Again in random order
-        for balancing_market, agents in self.balancing_agents.items():
-            if balancing_market.time_slot not in self.balancing_markets:
+        for time_slot, agents in self.balancing_agents.items():
+            if time_slot not in self.balancing_markets:
                 # exclude past BAs
                 continue
 
@@ -428,9 +435,9 @@ class Area:
                             transfer_fee_pct=self.config.iaa_fee
                         )
                         # Attach agent to own IAA list
-                        area_agent[market].append(iaa)
+                        area_agent[timeframe].append(iaa)
                         # And also to parents to allow events to flow form both markets
-                        parent_area_agent[parent_markets[timeframe]].append(iaa)
+                        parent_area_agent[timeframe].append(iaa)
                         if parent:
                             # Add inter area appliance to report energy
                             self.appliance = InterAreaAppliance(parent, self)

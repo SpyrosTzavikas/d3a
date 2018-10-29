@@ -14,6 +14,9 @@ class FakeArea():
         self.past_market = FakeMarket(4)
         self.current_market = FakeMarket(0)
 
+    def get_future_market_from_id(self, id):
+        return self.current_market
+
     @property
     def markets(self):
         return {"Fake Market": FakeMarket(self.count)}
@@ -40,6 +43,7 @@ class FakeArea():
 class FakeMarket:
     def __init__(self, count):
         self.count = count
+        self.id = count
         self.trade = Trade('id', 'time', Offer('id', 11.8, 0.5, 'FakeArea', self),
                            'FakeArea', 'buyer'
                            )
@@ -193,7 +197,8 @@ def test_event_market_cycle(storage_strategy_test2, area_test2, bought_energy=0,
                 # The complex price calculation is needed to get initial buying price of the energy
                 ) == str(((offer.price / 1.002) *
                           (1 /
-                           (1.05 - (0.5 * (storage_strategy_test2.risk / ConstSettings.MAX_RISK))
+                           (1.05 - (0.5 * (storage_strategy_test2.risk /
+                                           ConstSettings.GeneralSettings.MAX_RISK))
                             )
                            )
                           ))
@@ -221,7 +226,7 @@ def storage_strategy_test3(area_test3, called):
 
 
 def test_event_trade(storage_strategy_test3, area_test3):
-    storage_strategy_test3.event_trade(market=area_test3.current_market,
+    storage_strategy_test3.event_trade(market_id=area_test3.current_market.id,
                                        trade=area_test3.current_market.trade
                                        )
     # Check if trade is added to sold_offers dict
@@ -279,7 +284,7 @@ def test_energy_buying_possible(storage_strategy_test4, area_test4, market_test4
         storage_strategy_test4.accept_offer.calls[4][0][1]
 
     # Checking if storage respects it's current load and doesn't buy more than it has capacity
-    storage_strategy_test4.used_storage = (ConstSettings.STORAGE_CAPACITY * 2) + 1
+    storage_strategy_test4.used_storage = (ConstSettings.StorageSettings.CAPACITY * 2) + 1
     assert not storage_strategy_test4.energy_buying_possible(max_buying_price=30)
 
 

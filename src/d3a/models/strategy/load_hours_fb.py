@@ -20,10 +20,13 @@ class LoadHoursStrategy(BaseStrategy, BidUpdateFrequencyMixin):
     parameters = ('avg_power_W', 'hrs_per_day', 'hrs_of_day', 'max_energy_rate')
 
     def __init__(self, avg_power_W, hrs_per_day=None, hrs_of_day=None, daily_budget=None,
-                 min_energy_rate: Union[float, dict, str] = ConstSettings.LOAD_MIN_ENERGY_RATE,
-                 max_energy_rate: Union[float, dict, str] = ConstSettings.LOAD_MAX_ENERGY_RATE,
-                 balancing_energy_ratio: tuple = (ConstSettings.BALANCING_OFFER_DEMAND_RATIO,
-                                                  ConstSettings.BALANCING_OFFER_SUPPLY_RATIO)):
+                 min_energy_rate: Union[float, dict, str] =
+                 ConstSettings.LoadSettings.MIN_ENERGY_RATE,
+                 max_energy_rate: Union[float, dict, str] =
+                 ConstSettings.LoadSettings.MAX_ENERGY_RATE,
+                 balancing_energy_ratio: tuple =
+                 (ConstSettings.BalancingSettings.OFFER_DEMAND_RATIO,
+                  ConstSettings.BalancingSettings.OFFER_SUPPLY_RATIO)):
 
         BaseStrategy.__init__(self)
         self.min_energy_rate = read_arbitrary_profile(InputProfileTypes.RATE,
@@ -93,7 +96,7 @@ class LoadHoursStrategy(BaseStrategy, BidUpdateFrequencyMixin):
             acceptable_offer = self._find_acceptable_offer(market)
             if acceptable_offer and \
                     self.min_energy_rate[market.time_slot_str] <= \
-                    acceptable_offer.price / acceptable_offer.energy <= \
+                    round(acceptable_offer.price / acceptable_offer.energy, 8) <= \
                     self.max_energy_rate[market.time_slot_str]:
                 max_energy = self.energy_requirement_Wh[market.time_slot] / 1000.0
                 current_day = self._get_day_of_timestamp(market.time_slot)
@@ -124,9 +127,9 @@ class LoadHoursStrategy(BaseStrategy, BidUpdateFrequencyMixin):
             if market.time_slot not in self.energy_requirement_Wh:
                 continue
 
-            if ConstSettings.INTER_AREA_AGENT_MARKET_TYPE == 1:
+            if ConstSettings.IAASettings.MARKET_TYPE == 1:
                 self._one_sided_market_event_tick(market)
-            elif ConstSettings.INTER_AREA_AGENT_MARKET_TYPE == 2:
+            elif ConstSettings.IAASettings.MARKET_TYPE == 2:
                 self._double_sided_market_event_tick(market)
 
     def _allowed_operating_hours(self, time):
@@ -139,18 +142,34 @@ class LoadHoursStrategy(BaseStrategy, BidUpdateFrequencyMixin):
 
     def event_market_cycle(self):
         for market in self.active_markets:
-            self._demand_balancing_offer(market)
-            if ConstSettings.INTER_AREA_AGENT_MARKET_TYPE == 2:
+            if ConstSettings.IAASettings.MARKET_TYPE == 2:
                 if self.energy_requirement_Wh[market.time_slot] > 0:
-                    self.post_first_bid(market, self.energy_requirement_Wh[market.time_slot])
+                    if self.is_eligible_for_balancing_market:
+                        bid_energy = \
+                            self.energy_requirement_Wh[market.time_slot] - \
+                            self.balancing_energy_ratio.demand * \
+                            self.state.desired_energy_Wh[market.time_slot]
+                    else:
+                        bid_energy = self.energy_requirement_Wh[market.time_slot]
+                    self.post_first_bid(market, bid_energy)
                 self.update_market_cycle_bids()
 
-    def event_bid_deleted(self, *, market, bid):
+    def event_balancing_market_cycle(self):
+        for market in self.active_markets:
+            self._demand_balancing_offer(market)
+
+    def event_bid_deleted(self, *, market_id, bid):
+        market = self.area.get_future_market_from_id(market_id)
+        assert market is not None
+
         if bid.buyer != self.owner.name:
             return
         self.remove_bid_from_pending(bid.id, market)
 
-    def event_bid_traded(self, *, market, bid_trade):
+    def event_bid_traded(self, *, market_id, bid_trade):
+        market = self.area.get_future_market_from_id(market_id)
+        assert market is not None
+
         if bid_trade.buyer != self.owner.name:
             return
 
@@ -167,13 +186,16 @@ class LoadHoursStrategy(BaseStrategy, BidUpdateFrequencyMixin):
                 self.remove_bid_from_pending(bid_trade.offer.id, market)
             assert self.energy_requirement_Wh[market.time_slot] >= -0.00001
 
-        super().event_bid_traded(market=market, bid_trade=bid_trade)
+        super().event_bid_traded(market_id=market_id, bid_trade=bid_trade)
 
-    def event_trade(self, *, market, trade):
-        if ConstSettings.BALANCING_FLEXIBLE_LOADS_SUPPORT:
+    def event_trade(self, *, market_id, trade):
+        market = self.area.get_future_market_from_id(market_id)
+        assert market is not None
+
+        if ConstSettings.BalancingSettings.FLEXIBLE_LOADS_SUPPORT:
             # Load can only put supply_balancing_offers only when there is a trade in spot_market
             self._supply_balancing_offer(market, trade)
-        super().event_trade(market=market, trade=trade)
+        super().event_trade(market_id=market_id, trade=trade)
 
     # committing to increase its consumption when required
     def _demand_balancing_offer(self, market):

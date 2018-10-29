@@ -20,12 +20,13 @@ class PVStrategy(BaseStrategy, OfferUpdateFrequencyMixin):
     parameters = ('panel_count', 'risk')
 
     def __init__(
-        self, panel_count: int=1, risk: float=ConstSettings.DEFAULT_RISK,
-        min_selling_rate: float=ConstSettings.MIN_PV_SELLING_RATE,
-        initial_rate_option: float=ConstSettings.INITIAL_PV_RATE_OPTION,
-        energy_rate_decrease_option: int=ConstSettings.PV_RATE_DECREASE_OPTION,
-        energy_rate_decrease_per_update: float=ConstSettings.ENERGY_RATE_DECREASE_PER_UPDATE,
-        max_panel_power_W: float=ConstSettings.PV_MAX_PANEL_OUTPUT_W
+        self, panel_count: int=1, risk: float=ConstSettings.GeneralSettings.DEFAULT_RISK,
+        min_selling_rate: float=ConstSettings.PVSettings.MIN_SELLING_RATE,
+        initial_rate_option: float=ConstSettings.PVSettings.INITIAL_RATE_OPTION,
+        energy_rate_decrease_option: int=ConstSettings.PVSettings.RATE_DECREASE_OPTION,
+        energy_rate_decrease_per_update:
+        float=ConstSettings.GeneralSettings.ENERGY_RATE_DECREASE_PER_UPDATE,
+        max_panel_power_W: float=ConstSettings.PVSettings.MAX_PANEL_OUTPUT_W
     ):
         self._validate_constructor_arguments(panel_count, risk, max_panel_power_W)
         BaseStrategy.__init__(self)
@@ -130,22 +131,20 @@ class PVStrategy(BaseStrategy, OfferUpdateFrequencyMixin):
         self.risk = new_risk
         self.log.warning("Risk changed to %s", new_risk)
 
-    def event_offer_deleted(self, *, market, offer):
+    def event_offer_deleted(self, *, market_id, offer):
+        market = self.area.get_future_market_from_id(market_id)
+        if market is None:
+            return
         # if offer was deleted but not traded, free the energy in state.available_energy_kWh again
         if offer.id not in [trades.offer.id for trades in market.trades]:
             if offer.seller == self.owner.name:
                 self.state.available_energy_kWh[market.time_slot] += offer.energy
 
-    def event_offer(self, *, market, offer):
+    def event_offer(self, *, market_id, offer):
+        market = self.area.get_future_market_from_id(market_id)
+        assert market is not None
+
         # if offer was deleted but not traded, free the energy in state.available_energy_kWh again
         if offer.id not in [trades.offer.id for trades in market.trades]:
             if offer.seller == self.owner.name:
                 self.state.available_energy_kWh[market.time_slot] -= offer.energy
-
-    def update_market_cycle_offers(self, min_selling_rate):
-        self.min_selling_rate = min_selling_rate
-        # increase energy rate for each market again, except for the newly created one
-        for market in list(self.area.markets.values()):
-            self._decrease_price_timepoint_s[market.time_slot] = self._decrease_price_every_nr_s
-        for market in list(self.area.markets.values())[:-1]:
-            self.reset_price_on_market_cycle(market)

@@ -17,7 +17,7 @@ from d3a import TIME_ZONE
 from d3a.device_registry import DeviceRegistry
 
 
-ConstSettings.MAX_OFFER_TRAVERSAL_LENGTH = 10
+ConstSettings.GeneralSettings.MAX_OFFER_TRAVERSAL_LENGTH = 10
 
 TIME = pendulum.today(tz=TIME_ZONE).at(hour=10, minute=45, second=5)
 
@@ -37,6 +37,9 @@ class FakeArea:
                         TIME + 2 * self.config.slot_length: FakeMarket(0)}
         self.test_balancing_market = FakeMarket(1)
         self.test_balancing_market_2 = FakeMarket(2)
+
+    def get_future_market_from_id(self, id):
+        return self._next_market
 
     @property
     def config(self):
@@ -71,6 +74,7 @@ class FakeArea:
 class FakeMarket:
     def __init__(self, count):
         self.count = count
+        self.id = count
         self.most_affordable_energy = 0.1551
         self.created_balancing_offers = []
         self.bids = {}
@@ -125,7 +129,7 @@ class TestLoadHoursStrategyInput(unittest.TestCase):
         # MAX_OFFER_TRAVERSAL_LENGTH should be set here, otherwise some tests fail
         # when only the load tests are executed. Works fine when all tests are executed
         # though
-        ConstSettings.MAX_OFFER_TRAVERSAL_LENGTH = 5
+        ConstSettings.GeneralSettings.MAX_OFFER_TRAVERSAL_LENGTH = 5
         self.appliance = MagicMock(spec=SimpleAppliance)
         self.strategy1 = MagicMock(spec=LoadHoursStrategy)
 
@@ -290,7 +294,7 @@ def test_device_operating_hours_deduction_with_partial_trade(load_hours_strategy
 def test_event_bid_traded_does_not_remove_bid_for_partial_trade(load_hours_strategy_test5,
                                                                 called,
                                                                 partial):
-    ConstSettings.INTER_AREA_AGENT_MARKET_TYPE = 2
+    ConstSettings.IAASettings.MARKET_TYPE = 2
 
     trade_market = load_hours_strategy_test5.area.next_market
     load_hours_strategy_test5.remove_bid_from_pending = called
@@ -304,7 +308,7 @@ def test_event_bid_traded_does_not_remove_bid_for_partial_trade(load_hours_strat
     # Increase energy requirement to cover the energy from the bid
     load_hours_strategy_test5.energy_requirement_Wh[TIME] = 1000
     trade = Trade('idt', None, bid, 'B', load_hours_strategy_test5.owner.name, residual=partial)
-    load_hours_strategy_test5.event_bid_traded(market=trade_market, bid_trade=trade)
+    load_hours_strategy_test5.event_bid_traded(market_id=trade_market.id, bid_trade=trade)
 
     if not partial:
         assert len(load_hours_strategy_test5.remove_bid_from_pending.calls) == 1
@@ -315,13 +319,13 @@ def test_event_bid_traded_does_not_remove_bid_for_partial_trade(load_hours_strat
         assert len(load_hours_strategy_test5.remove_bid_from_pending.calls) == 0
         assert load_hours_strategy_test5.get_posted_bids(trade_market) == [bid]
 
-    ConstSettings.INTER_AREA_AGENT_MARKET_TYPE = 1
+    ConstSettings.IAASettings.MARKET_TYPE = 1
 
 
 def test_event_bid_traded_removes_bid_from_pending_if_energy_req_0(load_hours_strategy_test5,
                                                                    market_test2,
                                                                    called):
-    ConstSettings.INTER_AREA_AGENT_MARKET_TYPE = 2
+    ConstSettings.IAASettings.MARKET_TYPE = 2
 
     trade_market = load_hours_strategy_test5.area.next_market
     load_hours_strategy_test5.remove_bid_from_pending = called
@@ -333,14 +337,14 @@ def test_event_bid_traded_removes_bid_from_pending_if_energy_req_0(load_hours_st
     # Increase energy requirement to cover the energy from the bid + threshold
     load_hours_strategy_test5.energy_requirement_Wh[TIME] = bid.energy * 1000 + 0.000009
     trade = Trade('idt', None, bid, 'B', load_hours_strategy_test5.owner.name, residual=True)
-    load_hours_strategy_test5.event_bid_traded(market=trade_market, bid_trade=trade)
+    load_hours_strategy_test5.event_bid_traded(market_id=trade_market.id, bid_trade=trade)
 
     assert len(load_hours_strategy_test5.remove_bid_from_pending.calls) == 1
     assert load_hours_strategy_test5.remove_bid_from_pending.calls[0][0][0] == repr(bid.id)
     assert load_hours_strategy_test5.remove_bid_from_pending.calls[0][0][1] == \
         repr(trade_market)
 
-    ConstSettings.INTER_AREA_AGENT_MARKET_TYPE = 1
+    ConstSettings.IAASettings.MARKET_TYPE = 1
 
 
 @pytest.fixture
@@ -368,6 +372,7 @@ def test_balancing_offers_are_created_if_device_in_registry(
     DeviceRegistry.REGISTRY = {'FakeArea': (30, 40)}
     balancing_fixture.event_activate()
     balancing_fixture.event_market_cycle()
+    balancing_fixture.event_balancing_market_cycle()
     expected_balancing_demand_energy = \
         balancing_fixture.balancing_energy_ratio.demand * \
         balancing_fixture.energy_per_slot_Wh
@@ -380,7 +385,7 @@ def test_balancing_offers_are_created_if_device_in_registry(
 
     assert actual_balancing_demand_price == expected_balancing_demand_energy * 30
     selected_offer = area_test2.current_market.sorted_offers[0]
-    balancing_fixture.event_trade(market=area_test2.current_market,
+    balancing_fixture.event_trade(market_id=area_test2.current_market.id,
                                   trade=Trade(id='id',
                                               time=area_test2.now,
                                               offer=selected_offer,

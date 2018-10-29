@@ -14,16 +14,16 @@ device_registry_dict = {
 
 def get_setup(config):
     DeviceRegistry.REGISTRY = device_registry_dict
-    ConstSettings.BALANCING_FLEXIBLE_LOADS_SUPPORT = False
-    ConstSettings.ENABLE_BALANCING_MARKET = True
+    ConstSettings.BalancingSettings.FLEXIBLE_LOADS_SUPPORT = False
+    ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET = True
     area = Area(
         'Grid',
         [
             Area(
                 'House 1',
                 [
-                    Area('H1 Storage', strategy=StorageStrategy(initial_capacity=6.0,
-                                                                battery_capacity=50.0),
+                    Area('H1 Storage', strategy=StorageStrategy(initial_capacity_kWh=6.0,
+                                                                battery_capacity_kWh=50.0),
                          appliance=SwitchableAppliance()),
                 ]
             ),

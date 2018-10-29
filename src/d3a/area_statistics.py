@@ -3,7 +3,6 @@ from statistics import mean
 from d3a.models.strategy.storage import StorageStrategy
 from d3a.models.strategy.inter_area import InterAreaAgent
 from d3a.models.strategy.pv import PVStrategy
-from d3a.models.strategy.greedy_night_storage import NightStorageStrategy
 from d3a.models.strategy.load_hours_fb import CellTowerLoadHoursStrategy
 from d3a.util import area_name_from_area_or_iaa_name, make_iaa_name
 
@@ -28,8 +27,7 @@ def gather_area_loads_and_trade_prices(area, load_price_lists):
         if child.children == [] and not \
                 (isinstance(child.strategy, StorageStrategy) or
                  isinstance(child.strategy, PVStrategy) or
-                 isinstance(child.strategy, InterAreaAgent) or
-                 isinstance(child.strategy, NightStorageStrategy)):
+                 isinstance(child.strategy, InterAreaAgent)):
             for slot, market in child.parent.past_markets.items():
                 if slot.hour not in load_price_lists.keys():
                     load_price_lists[slot.hour] = loads_avg_prices(load=[], price=[])
@@ -71,8 +69,7 @@ def gather_prices_pv_stor_energ(area, price_energ_lists):
                 price_energ_lists[slot_time_str].pv_energ.extend(traded_energy)
 
             if child.children == [] and \
-                    (isinstance(child.strategy, StorageStrategy) or
-                     isinstance(child.strategy, NightStorageStrategy)):
+                    (isinstance(child.strategy, StorageStrategy)):
                 traded_energy = []
 
                 for t in market.trades:
@@ -124,6 +121,26 @@ def _accumulate_cell_tower_trades(cell_tower, grid, accumulated_trades):
     return accumulated_trades
 
 
+def _accumulate_cell_tower_balancing_trades(cell_tower, grid, accumulated_balancing_trades):
+    accumulated_balancing_trades[cell_tower.name] = {
+        "type": "cell_tower",
+        "id": cell_tower.area_id,
+        "produced": 0.0,
+        "earned": 0.0,
+        "consumedFrom": defaultdict(int),
+        "spentTo": defaultdict(int),
+    }
+    for slot, market in grid.past_balancing_markets.items():
+        for trade in market.trades:
+            if trade.buyer == cell_tower.name:
+                sell_id = area_name_from_area_or_iaa_name(trade.seller)
+                accumulated_balancing_trades[cell_tower.name]["consumedFrom"][sell_id] +=\
+                    trade.offer.energy
+                accumulated_balancing_trades[cell_tower.name]["spentTo"][sell_id] +=\
+                    trade.offer.price
+    return accumulated_balancing_trades
+
+
 def _accumulate_house_trades(house, grid, accumulated_trades):
     if house.name not in accumulated_trades:
         accumulated_trades[house.name] = {
@@ -158,6 +175,46 @@ def _accumulate_house_trades(house, grid, accumulated_trades):
     return accumulated_trades
 
 
+def _accumulate_house_balancing_trades(house, grid, accumulated_balancing_trades):
+    if house.name not in accumulated_balancing_trades:
+        accumulated_balancing_trades[house.name] = {
+            "type": "house",
+            "id": house.area_id,
+            "produced": 0.0,
+            "earned": 0.0,
+            "consumedFrom": defaultdict(int),
+            "spentTo": defaultdict(int),
+        }
+    house_IAA_name = make_iaa_name(house)
+    child_names = [c.name for c in house.children]
+    for slot, market in house.past_balancing_markets.items():
+        for trade in market.trades:
+            if area_name_from_area_or_iaa_name(trade.seller) in child_names and \
+                    area_name_from_area_or_iaa_name(trade.buyer) in child_names:
+                # House self-consumption trade
+                accumulated_balancing_trades[house.name]["produced"] -=\
+                    trade.offer.energy
+                accumulated_balancing_trades[house.name]["earned"] +=\
+                    trade.offer.price
+                accumulated_balancing_trades[house.name]["consumedFrom"][house.name] +=\
+                    trade.offer.energy
+                accumulated_balancing_trades[house.name]["spentTo"][house.name] +=\
+                    trade.offer.price
+            elif trade.buyer == house_IAA_name:
+                accumulated_balancing_trades[house.name]["earned"] += trade.offer.price
+                accumulated_balancing_trades[house.name]["produced"] -= trade.offer.energy
+
+    for slot, market in grid.past_balancing_markets.items():
+        for trade in market.trades:
+            if trade.buyer == house_IAA_name and trade.buyer != trade.offer.seller:
+                seller_id = area_name_from_area_or_iaa_name(trade.seller)
+                accumulated_balancing_trades[house.name]["consumedFrom"][seller_id] += \
+                    trade.offer.energy
+                accumulated_balancing_trades[house.name]["spentTo"][seller_id] += \
+                    trade.offer.price
+    return accumulated_balancing_trades
+
+
 def _accumulate_grid_trades(area, accumulated_trades):
     for child in area.children:
         if _is_cell_tower_node(child):
@@ -170,6 +227,23 @@ def _accumulate_grid_trades(area, accumulated_trades):
         else:
             accumulated_trades = _accumulate_grid_trades(child, accumulated_trades)
     return accumulated_trades
+
+
+def _accumulate_grid_balancing_trades(area, accumulated_balancing_trades):
+    for child in area.children:
+        if _is_cell_tower_node(child):
+            accumulated_balancing_trades = \
+                _accumulate_cell_tower_trades(child, area, accumulated_balancing_trades)
+        elif _is_house_node(child):
+            accumulated_balancing_trades = \
+                _accumulate_house_trades(child, area, accumulated_balancing_trades)
+        elif child.children == []:
+            # Leaf node, no need for calculating cumulative trades, continue iteration
+            continue
+        else:
+            accumulated_balancing_trades = \
+                _accumulate_grid_balancing_trades(child, accumulated_balancing_trades)
+    return accumulated_balancing_trades
 
 
 def area_name_to_id(area_name, grid):
@@ -257,6 +331,22 @@ def export_cumulative_grid_trades(area):
         "unit": "kWh",
         "areas": sorted(accumulated_trades.keys()),
         "cumulative-grid-trades": [
+            # Append first produced energy for all areas
+            _generate_produced_energy_entries(accumulated_trades),
+            # Then self consumption energy for all areas
+            _generate_self_consumption_entries(accumulated_trades),
+            # Then consumption entries for intra-house trades
+            *_generate_intraarea_consumption_entries(accumulated_trades)]
+
+    }
+
+
+def export_cumulative_grid_balancing_trades(area):
+    accumulated_trades = _accumulate_grid_balancing_trades(area, {})
+    return {
+        "unit": "kWh",
+        "areas": sorted(accumulated_trades.keys()),
+        "cumulative-grid-balancing-trades": [
             # Append first produced energy for all areas
             _generate_produced_energy_entries(accumulated_trades),
             # Then self consumption energy for all areas

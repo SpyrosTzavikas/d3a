@@ -22,6 +22,9 @@ class FakeArea():
         self.count = count
         self.test_market = FakeMarket(0)
 
+    def get_future_market_from_id(self, id):
+        return self.test_market
+
     @property
     def config(self):
         return DEFAULT_CONFIG
@@ -51,6 +54,7 @@ class FakeArea():
 class FakeMarket:
     def __init__(self, count):
         self.count = count
+        self.id = count
         self.created_offers = []
         self.offers = {'id': Offer(id='id', price=10, energy=0.5, seller='A', market=self)}
 
@@ -91,7 +95,7 @@ def area_test1():
 
 @pytest.fixture()
 def pv_test1(area_test1):
-    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.DEFAULT_PV_POWER_PROFILE)
+    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.PVSettings.DEFAULT_POWER_PROFILE)
     p.area = area_test1
     p.owner = area_test1
     return p
@@ -119,7 +123,7 @@ def market_test3(area_test3):
 
 @pytest.fixture()
 def pv_test3(area_test3):
-    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.DEFAULT_PV_POWER_PROFILE)
+    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.PVSettings.DEFAULT_POWER_PROFILE)
     p.area = area_test3
     p.owner = area_test3
     p.offers.posted = {Offer('id', 1, 1, 'FakeArea', market=area_test3.test_market):
@@ -144,7 +148,7 @@ def testing_decrease_offer_price(area_test3, market_test3, pv_test3):
 
 @pytest.fixture()
 def pv_test4(area_test3, called):
-    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.DEFAULT_PV_POWER_PROFILE)
+    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.PVSettings.DEFAULT_POWER_PROFILE)
     p.area = area_test3
     p.owner = area_test3
     p.offers.posted = {
@@ -154,7 +158,7 @@ def pv_test4(area_test3, called):
 
 
 def testing_event_trade(area_test3, pv_test4):
-    pv_test4.event_trade(market=area_test3.test_market,
+    pv_test4.event_trade(market_id=area_test3.test_market.id,
                          trade=Trade(id='id', time='time',
                                      offer=Offer(id='id', price=20, energy=1, seller='FakeArea'),
                                      seller=area_test3, buyer='buyer'
@@ -190,7 +194,7 @@ def testing_trigger_risk(pv_test5):
 
 @pytest.fixture()
 def pv_test6(area_test3):
-    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.DEFAULT_PV_POWER_PROFILE)
+    p = PVPredefinedStrategy(cloud_coverage=ConstSettings.PVSettings.DEFAULT_POWER_PROFILE)
     p.area = area_test3
     p.owner = area_test3
     p.offers.posted = {}
@@ -246,7 +250,7 @@ def test_does_not_offer_sold_energy_again(pv_test6, market_test3):
     pv_test6.event_market_cycle()
     assert market_test3.created_offers[0].energy == pv_test6.energy_production_forecast_kWh[TIME]
     fake_trade = FakeTrade(market_test3.created_offers[0])
-    pv_test6.event_trade(market=market_test3, trade=fake_trade)
+    pv_test6.event_trade(market_id=market_test3.id, trade=fake_trade)
     market_test3.created_offers = []
     pv_test6.event_tick(area=area_test3)
     assert not market_test3.created_offers

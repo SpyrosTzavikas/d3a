@@ -13,14 +13,14 @@ from d3a.models.strategy.const import ConstSettings
 device_registry_dict = {
     "H1 General Load": (33, 35),
     "H2 General Load": (33, 35),
-    "H1 Storage1": (23, 25),
-    "H1 Storage2": (23, 25),
+    "H1 Storage1": (33, 35),
+    "H1 Storage2": (33, 35),
 }
 
 
 def get_setup(config):
     DeviceRegistry.REGISTRY = device_registry_dict
-    ConstSettings.ENABLE_BALANCING_MARKET = True
+    ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET = True
     area = Area(
         'Grid',
         [
@@ -33,9 +33,9 @@ def get_setup(config):
                                                                            range(12, 18)),
                                                                        max_energy_rate=35),
                          appliance=SwitchableAppliance()),
-                    Area('H1 Storage1', strategy=StorageStrategy(initial_capacity=0.6),
+                    Area('H1 Storage1', strategy=StorageStrategy(initial_capacity_kWh=0.6),
                          appliance=SwitchableAppliance()),
-                    Area('H1 Storage2', strategy=StorageStrategy(initial_capacity=0.6),
+                    Area('H1 Storage2', strategy=StorageStrategy(initial_capacity_kWh=0.6),
                          appliance=SwitchableAppliance()),
                 ]
             ),

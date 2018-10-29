@@ -5,6 +5,7 @@ from d3a.models.market import Offer, Trade, BalancingOffer
 from d3a.models.strategy.commercial_producer import CommercialStrategy
 from d3a.models.area import DEFAULT_CONFIG
 from d3a.device_registry import DeviceRegistry
+from d3a.models.strategy.const import ConstSettings
 
 
 class FakeArea:
@@ -15,6 +16,9 @@ class FakeArea:
         self.test_market = FakeMarket(0)
         self.test_balancing_market = FakeMarket(1)
         self.test_balancing_market_2 = FakeMarket(2)
+
+    def get_future_market_from_id(self, id):
+        return self.test_market
 
     @property
     def markets(self):
@@ -31,6 +35,7 @@ class FakeArea:
 
 class FakeMarket:
     def __init__(self, count):
+        self.id = count
         self.count = count
         self.created_offers = []
         self.created_balancing_offers = []
@@ -79,6 +84,8 @@ def test_balancing_offers_are_not_sent_to_all_markets_if_device_not_in_registry(
 
 def test_balancing_offers_are_sent_to_all_markets_if_device_in_registry(
         commercial_test1, area_test1):
+
+    ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET = True
     DeviceRegistry.REGISTRY = {'FakeArea': (30, 40)}
     commercial_test1.event_activate()
     assert len(area_test1.test_balancing_market.created_balancing_offers) == 1
@@ -133,7 +140,7 @@ def commercial_test2(area_test2):
 def test_event_trade(area_test2, commercial_test2):
     commercial_test2.event_activate()
     traded_offer = Offer(id='id', price=20, energy=1, seller='FakeArea',)
-    commercial_test2.event_trade(market=area_test2.test_market,
+    commercial_test2.event_trade(market_id=area_test2.test_market.id,
                                  trade=Trade(id='id',
                                              time='time',
                                              offer=traded_offer,
@@ -149,7 +156,7 @@ def test_on_offer_changed(area_test2, commercial_test2):
     commercial_test2.event_activate()
     existing_offer = Offer(id='id', price=20, energy=1, seller='FakeArea')
     new_offer = Offer(id='new_id', price=15, energy=0.75, seller='FakeArea')
-    commercial_test2.event_offer_changed(market=area_test2.test_market,
+    commercial_test2.event_offer_changed(market_id=area_test2.test_market.id,
                                          existing_offer=existing_offer,
                                          new_offer=new_offer)
     assert existing_offer.id in commercial_test2.offers.changed
@@ -162,12 +169,12 @@ def test_event_trade_after_offer_changed_partial_offer(area_test2, commercial_te
 
     commercial_test2.offers.post(existing_offer, area_test2.test_market)
     commercial_test2.offers.post(new_offer, area_test2.test_market)
-    commercial_test2.event_offer_changed(market=area_test2.test_market,
+    commercial_test2.event_offer_changed(market_id=area_test2.test_market.id,
                                          existing_offer=existing_offer,
                                          new_offer=new_offer)
     assert existing_offer.id in commercial_test2.offers.changed
     assert commercial_test2.offers.changed[existing_offer.id] == new_offer
-    commercial_test2.event_trade(market=area_test2.test_market,
+    commercial_test2.event_trade(market_id=area_test2.test_market.id,
                                  trade=Trade(id='id',
                                              time='time',
                                              offer=existing_offer,

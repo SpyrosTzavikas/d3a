@@ -120,6 +120,7 @@ class Trade(namedtuple('Trade', ('id', 'time', 'offer', 'seller',
 class Market:
     def __init__(self, time_slot=None, area=None, notification_listener=None, readonly=False):
         self.area = area
+        self.id = str(uuid.uuid4())
         self.time_slot = time_slot
         self.time_slot_str = time_slot.strftime(TIME_FORMAT) \
             if self.time_slot is not None \
@@ -184,7 +185,7 @@ class Market:
     def _notify_listeners(self, event, **kwargs):
         # Deliver notifications in random order to ensure fairness
         for listener in sorted(self.notification_listeners, key=lambda l: random.random()):
-            listener(event, market=self, **kwargs)
+            listener(event, market_id=self.id, **kwargs)
 
     def offer(self, price: float, energy: float, seller: str,
               balancing_agent: bool=False) -> Offer:
@@ -353,14 +354,11 @@ class Market:
 
         trade_id = self._handle_blockchain_trade_event(offer, buyer,
                                                        original_offer, residual_offer)
-        trade = Trade(trade_id, time, offer, offer.seller, buyer,
-                      residual_offer, price_drop)
+        trade = Trade(trade_id, time, offer, offer.seller, buyer, residual_offer, price_drop)
         if self.area and self.area.bc:
             self._trades_by_id[trade_id] = trade
 
         self._update_stats_after_trade(trade, offer, buyer)
-
-        trade = Trade(trade_id, time, offer, offer.seller, buyer, residual_offer, price_drop)
         log.warning(f"[TRADE][{self.time_slot_str}] {trade}")
 
         # FIXME: Needs to be triggered by blockchain event

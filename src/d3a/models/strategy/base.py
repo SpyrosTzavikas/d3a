@@ -104,7 +104,7 @@ class Offers:
         except AttributeError:
             raise SimulationException("Trade event before strategy was initialized.")
 
-    def on_offer_changed(self, market, existing_offer, new_offer):
+    def on_offer_changed(self, existing_offer, new_offer):
         if existing_offer.seller == self.strategy.owner.name:
             assert existing_offer.id not in self.changed, \
                    "Offer should only change once before each trade."
@@ -151,7 +151,8 @@ class BaseStrategy(TriggerMixin, EventMixin, AreaBehaviorBase):
 
     @property
     def is_eligible_for_balancing_market(self):
-        if self.owner.name in DeviceRegistry.REGISTRY and ConstSettings.ENABLE_BALANCING_MARKET:
+        if self.owner.name in DeviceRegistry.REGISTRY and \
+                ConstSettings.BalancingSettings.ENABLE_BALANCING_MARKET:
             return True
 
     def accept_offer(self, market: Market, offer, *, buyer=None, energy=None, price_drop=False):
@@ -225,8 +226,9 @@ class BaseStrategy(TriggerMixin, EventMixin, AreaBehaviorBase):
         if self.enabled or event_type in (AreaEvent.ACTIVATE, MarketEvent.TRADE):
             super().event_listener(event_type, **kwargs)
 
-    def event_trade(self, *, market, trade):
+    def event_trade(self, *, market_id, trade):
+        market = self.area.get_future_market_from_id(market_id)
         self.offers.on_trade(market, trade)
 
-    def event_offer_changed(self, *, market, existing_offer, new_offer):
-        self.offers.on_offer_changed(market, existing_offer, new_offer)
+    def event_offer_changed(self, *, market_id, existing_offer, new_offer):
+        self.offers.on_offer_changed(existing_offer, new_offer)
