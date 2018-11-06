@@ -9,9 +9,8 @@ import shutil
 from slugify import slugify
 
 from d3a import TIME_ZONE
-from d3a.models.market import Trade, BalancingTrade
-from d3a.models.strategy.fridge import FridgeStrategy
-from d3a.models.strategy.load_hours_fb import LoadHoursStrategy, CellTowerLoadHoursStrategy
+from d3a.models.market.market_structures import Trade, BalancingTrade
+from d3a.models.strategy.load_hours import LoadHoursStrategy, CellTowerLoadHoursStrategy
 from d3a.models.strategy.predefined_load import DefinedLoadStrategy
 from d3a.models.strategy.pv import PVStrategy
 from d3a.models.strategy.storage import StorageStrategy
@@ -128,16 +127,16 @@ class ExportAndPlot:
                 writer = csv.writer(csv_file)
                 writer.writerow(labels)
                 out_dict = dict((key, {}) for key in out_keys)
-                for slot, market in past_markets.items():
+                for market in past_markets:
                     for trade in market.trades:
-                        row = (slot,) + trade._to_csv()
+                        row = (market.time_slot,) + trade._to_csv()
                         writer.writerow(row)
                         for ii, ks in enumerate(out_keys):
                             node = slugify(row[out_keys_ids[ii]], to_lower=True)
                             if node not in out_dict[ks]:
                                 out_dict[ks][node] = dict(
-                                    (key, 0) for key in area.past_markets.keys())
-                            out_dict[ks][node][slot] += row[4]
+                                    (m.time_slot, 0) for m in area.past_markets)
+                            out_dict[ks][node][market.time_slot] += row[4]
         except OSError:
             _log.exception("Could not export area trades")
 
@@ -154,7 +153,7 @@ class ExportAndPlot:
         """
         labels = ("slot", "rate [ct./kWh]", "energy [kWh]", "seller")
         for i, child in enumerate(area.children):
-            for slot, market in area.past_markets.items():
+            for market in area.past_markets:
                 for trade in market.trades:
                     buyer_slug = slugify(trade.buyer, to_lower=True)
                     seller_slug = slugify(trade.seller, to_lower=True)
@@ -163,7 +162,7 @@ class ExportAndPlot:
                     if seller_slug not in self.seller_trades:
                         self.seller_trades[seller_slug] = dict((key, []) for key in labels)
                     else:
-                        values = (slot, ) + \
+                        values = (market.time_slot, ) + \
                                  (round(trade.offer.price/trade.offer.energy, 4),
                                   (trade.offer.energy * -1),) + \
                                  (slugify(trade.seller, to_lower=True),)
@@ -418,11 +417,10 @@ class ExportUpperLevelData(ExportData):
                 'max trade rate [ct./kWh]',
                 '# trades',
                 'total energy traded [kWh]',
-                'total trade volume [EUR]']
+                'total trade volume [EURO ct.]']
 
     def rows(self):
-        markets = self.area.past_markets
-        return [self._row(slot, markets[slot]) for slot in markets]
+        return [self._row(m.time_slot, m) for m in self.area.past_markets]
 
     def _row(self, slot, market):
         return [slot,
@@ -444,8 +442,7 @@ class ExportBalancingData:
                 'avg demand balancing trade rate [ct./kWh]']
 
     def rows(self):
-        markets = self.area.past_balancing_markets
-        return [self._row(slot, markets[slot]) for slot in markets]
+        return [self._row(m.time_slot, m) for m in self.area.past_balancing_markets]
 
     def _row(self, slot, market):
         return [slot,
@@ -463,9 +460,7 @@ class ExportLeafData(ExportData):
                 ] + self._specific_labels()
 
     def _specific_labels(self):
-        if isinstance(self.area.strategy, FridgeStrategy):
-            return ['temperature [°C]']
-        elif isinstance(self.area.strategy, StorageStrategy):
+        if isinstance(self.area.strategy, StorageStrategy):
             return ['bought [kWh]', 'sold [kWh]', 'charge [kWh]', 'offered [kWh]', 'charge [%]']
         elif isinstance(self.area.strategy, LoadHoursStrategy):
             return ['desired energy [kWh]', 'deficit [kWh]']
@@ -474,8 +469,7 @@ class ExportLeafData(ExportData):
         return []
 
     def rows(self):
-        markets = self.area.parent.past_markets
-        return [self._row(slot, markets[slot]) for slot in markets]
+        return [self._row(m.time_slot, m) for m in self.area.parent.past_markets]
 
     def _traded(self, market):
         return market.traded_energy[self.area.name]
@@ -486,9 +480,7 @@ class ExportLeafData(ExportData):
                 ] + self._specific_row(slot, market)
 
     def _specific_row(self, slot, market):
-        if isinstance(self.area.strategy, FridgeStrategy):
-            return [self.area.strategy.temp_history[slot]]
-        elif isinstance(self.area.strategy, (StorageStrategy)):
+        if isinstance(self.area.strategy, (StorageStrategy)):
             s = self.area.strategy.state
             return [market.bought_energy(self.area.name),
                     market.sold_energy(self.area.name),

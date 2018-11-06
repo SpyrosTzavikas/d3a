@@ -7,9 +7,9 @@ import pathlib
 from d3a import TIME_FORMAT, PENDULUM_TIME_FORMAT
 from d3a.util import generate_market_slot_list
 from d3a.models.strategy.pv import PVStrategy
-from d3a.models.strategy.const import ConstSettings
-from d3a.models.strategy.read_user_profile import read_profile_csv_to_dict, read_arbitrary_profile
-from d3a.models.strategy.read_user_profile import InputProfileTypes
+from d3a.models.const import ConstSettings
+from d3a.models.read_user_profile import read_profile_csv_to_dict, read_arbitrary_profile
+from d3a.models.read_user_profile import InputProfileTypes
 from d3a.util import d3a_path
 from typing import Dict
 
@@ -26,7 +26,9 @@ class PVPredefinedStrategy(PVStrategy):
                  initial_rate_option: int=ConstSettings.PVSettings.INITIAL_RATE_OPTION,
                  energy_rate_decrease_option=ConstSettings.PVSettings.RATE_DECREASE_OPTION,
                  energy_rate_decrease_per_update=ConstSettings.GeneralSettings.
-                 ENERGY_RATE_DECREASE_PER_UPDATE):
+                 ENERGY_RATE_DECREASE_PER_UPDATE,
+                 max_panel_power_W: float = ConstSettings.PVSettings.MAX_PANEL_OUTPUT_W
+                 ):
         """
         Constructor of PVPredefinedStrategy
         :param risk: PV risk parameter
@@ -38,7 +40,8 @@ class PVPredefinedStrategy(PVStrategy):
                          min_selling_rate=min_selling_rate,
                          initial_rate_option=initial_rate_option,
                          energy_rate_decrease_option=energy_rate_decrease_option,
-                         energy_rate_decrease_per_update=energy_rate_decrease_per_update
+                         energy_rate_decrease_per_update=energy_rate_decrease_per_update,
+                         max_panel_power_W=max_panel_power_W
                          )
         self._power_profile_index = cloud_coverage
         self._time_format = TIME_FORMAT
@@ -102,7 +105,8 @@ class PVUserProfileStrategy(PVPredefinedStrategy):
                  initial_rate_option: int=ConstSettings.PVSettings.INITIAL_RATE_OPTION,
                  energy_rate_decrease_option=ConstSettings.PVSettings.RATE_DECREASE_OPTION,
                  energy_rate_decrease_per_update=ConstSettings.GeneralSettings.
-                 ENERGY_RATE_DECREASE_PER_UPDATE
+                 ENERGY_RATE_DECREASE_PER_UPDATE,
+                 max_panel_power_W: float = ConstSettings.PVSettings.MAX_PANEL_OUTPUT_W
                  ):
         """
         Constructor of PVUserProfileStrategy
@@ -117,7 +121,8 @@ class PVUserProfileStrategy(PVPredefinedStrategy):
                          min_selling_rate=min_selling_rate,
                          initial_rate_option=initial_rate_option,
                          energy_rate_decrease_option=energy_rate_decrease_option,
-                         energy_rate_decrease_per_update=energy_rate_decrease_per_update
+                         energy_rate_decrease_per_update=energy_rate_decrease_per_update,
+                         max_panel_power_W=max_panel_power_W
                          )
         self._power_profile_W = power_profile
         self._time_format = TIME_FORMAT

@@ -5,9 +5,9 @@ from pendulum import DateTime
 
 from d3a import TIME_ZONE
 from d3a.models.area import DEFAULT_CONFIG
-from d3a.models.market import Offer, Trade
+from d3a.models.market.market_structures import Offer, Trade
 from d3a.models.strategy.pv import PVStrategy
-from d3a.models.strategy.const import ConstSettings
+from d3a.models.const import ConstSettings
 from d3a import TIME_FORMAT
 
 ENERGY_FORECAST = {}  # type: Dict[Time, float]
@@ -47,10 +47,10 @@ class FakeArea():
         return 30
 
     @property
-    def markets(self):
-        return {TIME: self.test_market,
-                TIME + self.config.slot_length: self.test_market,
-                TIME + 2 * self.config.slot_length: self.test_market}
+    def all_markets(self):
+        return [self.test_market,
+                self.test_market,
+                self.test_market]
 
 
 class FakeMarket:
@@ -424,4 +424,4 @@ def pv_test9(area_test9):
 def testing_number_of_pv_sell_offers(pv_test9, market_test9, area_test9):
     pv_test9.event_activate()
     pv_test9.event_market_cycle()
-    assert len(market_test9.created_offers) == len(list(area_test9.markets.keys()))
+    assert len(market_test9.created_offers) == len(area_test9.all_markets)

@@ -1,7 +1,7 @@
 import sys
 from d3a.models.strategy import ureg, Q_
 
-from d3a.models.strategy.base import BaseStrategy
+from d3a.models.strategy import BaseStrategy
 from d3a.device_registry import DeviceRegistry
 
 
@@ -16,24 +16,28 @@ class CommercialStrategy(BaseStrategy):
         self.energy_rate = energy_rate
 
     def _markets_to_offer_on_activate(self):
-        return self.area.markets.values()
+        return self.area.all_markets
 
-    def event_activate(self):
+    def place_initial_offers(self):
         # That's usually an init function but the markets aren't open during the init call
         for market in self._markets_to_offer_on_activate():
             self.offer_energy(market)
-
-        for market in self.area.balancing_markets.values():
+        for market in self.area.balancing_markets:
             self._offer_balancing_energy(market)
 
     def event_market_cycle(self):
-        # Post new offers
-        market = list(self.area.markets.values())[-1]
-        self.offer_energy(market)
 
-        if len(self.area.balancing_markets.values()) > 0:
-            balancing_market = list(self.area.balancing_markets.values())[-1]
-            self._offer_balancing_energy(balancing_market)
+        if not self.area.last_past_market:
+            # Post new offers only on first time_slot:
+            self.place_initial_offers()
+        else:
+            # Post new offers
+            market = self.area.all_markets[-1]
+            self.offer_energy(market)
+
+            if len(self.area.balancing_markets) > 0:
+                balancing_market = self.area.balancing_markets[-1]
+                self._offer_balancing_energy(balancing_market)
 
     def offer_energy(self, market):
         energy_rate = self.area.config.market_maker_rate[market.time_slot_str] \

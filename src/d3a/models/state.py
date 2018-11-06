@@ -2,7 +2,7 @@ from collections import defaultdict
 from pendulum import duration
 
 from math import isclose
-from d3a.models.strategy.const import ConstSettings
+from d3a.models.const import ConstSettings
 from d3a import limit_float_precision
 
 StorageSettings = ConstSettings.StorageSettings
@@ -62,13 +62,18 @@ class StorageState:
                  capacity=StorageSettings.CAPACITY,
                  max_abs_battery_power_kW=StorageSettings.MAX_ABS_POWER,
                  loss_per_hour=0.01,
-                 strategy=None):
+                 strategy=None,
+                 min_allowed_soc=None):
 
         if initial_soc is not None:
             if initial_capacity_kWh:
                 strategy.log.warning("Ignoring initial_capacity_kWh parameter since "
                                      "initial_soc has also been given.")
             initial_capacity_kWh = capacity * initial_soc / 100
+
+        if min_allowed_soc is None:
+            min_allowed_soc = StorageSettings.MIN_ALLOWED_SOC
+        self.min_allowed_soc = min_allowed_soc
 
         self.capacity = capacity
         self.loss_per_hour = loss_per_hour
@@ -114,20 +119,19 @@ class StorageState:
                                  - self.offered_sell_kWh[time_slot]
 
     def max_buy_energy_kWh(self, time_slot):
-        return self.capacity - (self.used_storage
-                                + self.pledged_buy_kWh[time_slot]
-                                + self.offered_buy_kWh[time_slot])
+        return self._battery_energy_per_slot - self.pledged_buy_kWh[time_slot] \
+                                             - self.offered_buy_kWh[time_slot]
 
     def set_battery_energy_per_slot(self, slot_length):
         self._battery_energy_per_slot = self.max_abs_battery_power_kW * \
                                         (slot_length / duration(hours=1))
 
     def has_battery_reached_max_power(self, energy, time_slot):
-        return abs(energy
-                   + self.pledged_sell_kWh[time_slot]
-                   + self.offered_sell_kWh[time_slot]
-                   - self.pledged_buy_kWh[time_slot]
-                   - self.offered_buy_kWh[time_slot]) > \
+        return limit_float_precision(abs(energy
+                                     + self.pledged_sell_kWh[time_slot]
+                                     + self.offered_sell_kWh[time_slot]
+                                     - self.pledged_buy_kWh[time_slot]
+                                     - self.offered_buy_kWh[time_slot])) > \
                self._battery_energy_per_slot
 
     def clamp_energy_to_sell_kWh(self, market_slot_time_list):
@@ -143,7 +147,7 @@ class StorageState:
         energy = self.used_storage \
             - accumulated_pledged \
             - accumulated_offered \
-            - StorageSettings.MIN_ALLOWED_SOC * self.capacity
+            - self.min_allowed_soc * self.capacity
         storage_dict = {}
         for time_slot in market_slot_time_list:
             storage_dict[time_slot] = limit_float_precision(min(
@@ -172,7 +176,7 @@ class StorageState:
         for time_slot in market_slot_time_list:
             clamped_energy = limit_float_precision(
                 min(energy, self.max_buy_energy_kWh(time_slot), self._battery_energy_per_slot))
-
+            clamped_energy = max(clamped_energy, 0)
             self.energy_to_buy_dict[time_slot] = clamped_energy
 
     def check_state(self, time_slot):
@@ -180,10 +184,9 @@ class StorageState:
         Sanity check of the state variables.
         """
         charge = limit_float_precision(self.used_storage / self.capacity)
-        max_value = self.capacity - ConstSettings.StorageSettings.MIN_ALLOWED_SOC * self.capacity
-
-        assert ConstSettings.StorageSettings.MIN_ALLOWED_SOC < charge or \
-            isclose(ConstSettings.StorageSettings.MIN_ALLOWED_SOC, charge, rel_tol=1e-06)
+        max_value = self.capacity - self.min_allowed_soc * self.capacity
+        assert self.min_allowed_soc < charge or \
+            isclose(self.min_allowed_soc, charge, rel_tol=1e-06)
         assert 0 <= limit_float_precision(self.offered_sell_kWh[time_slot]) <= max_value
         assert 0 <= limit_float_precision(self.pledged_sell_kWh[time_slot]) <= max_value
         assert 0 <= limit_float_precision(self.pledged_buy_kWh[time_slot]) <= max_value

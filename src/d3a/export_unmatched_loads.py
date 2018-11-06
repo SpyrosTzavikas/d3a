@@ -1,8 +1,7 @@
 from collections import OrderedDict
 
-from d3a.models.strategy.load_hours_fb import LoadHoursStrategy, CellTowerLoadHoursStrategy
+from d3a.models.strategy.load_hours import LoadHoursStrategy, CellTowerLoadHoursStrategy
 from d3a.models.strategy.predefined_load import DefinedLoadStrategy
-from d3a.models.strategy.permanent import PermanentLoadStrategy
 from d3a.area_statistics import get_area_type_string
 
 
@@ -10,16 +9,13 @@ DEFICIT_THRESHOLD_Wh = 0.0001
 
 
 def _calculate_stats_for_single_device(hour_data, area, current_slot):
-    if isinstance(area.strategy, LoadHoursStrategy) or \
-       isinstance(area.strategy, DefinedLoadStrategy):
+    if isinstance(area.strategy, (LoadHoursStrategy, DefinedLoadStrategy)):
         desired_energy_Wh = area.strategy.state.desired_energy_Wh[current_slot]
-    elif isinstance(area.strategy, PermanentLoadStrategy):
-        desired_energy_Wh = area.strategy.energy
     else:
         return hour_data
-    traded_energy_kWh = area.parent.past_markets[current_slot].traded_energy[area.name] \
-        if (current_slot in area.parent.past_markets) and \
-           (area.name in area.parent.past_markets[current_slot].traded_energy) \
+    selected_market = area.parent.get_past_market(current_slot)
+    traded_energy_kWh = selected_market.traded_energy[area.name] \
+        if selected_market is not None and (area.name in selected_market.traded_energy) \
         else 0.0
     # Different sign conventions, hence the +
     deficit = desired_energy_Wh + traded_energy_kWh * 1000.0
@@ -68,7 +64,8 @@ def _accumulate_device_stats_to_area_stats(per_hour_device_data):
 def _calculate_area_stats(area):
     per_hour_device_data = {}
     # Iterate first through all the available market slots of the area
-    for current_slot, market in area.parent.past_markets.items():
+    for market in area.parent.past_markets:
+        current_slot = market.time_slot
         hour_data = per_hour_device_data.get(current_slot.hour, {"devices": {}})
         # Update hour data for the area, by accumulating slots in one hour
         per_hour_device_data[current_slot.hour] = \
@@ -82,9 +79,7 @@ def _is_house_node(area):
     # Should not include any houses that do not have loads, therefore the houses are
     # further filtered out to contain at least one load
     return all(grandkid.children == [] for grandkid in area.children) and \
-           (any(isinstance(grandkid.strategy, LoadHoursStrategy) or
-                isinstance(grandkid.strategy, PermanentLoadStrategy) or
-                isinstance(grandkid.strategy, DefinedLoadStrategy)
+           (any(isinstance(grandkid.strategy, (LoadHoursStrategy, DefinedLoadStrategy))
                 for grandkid in area.children))
 
 

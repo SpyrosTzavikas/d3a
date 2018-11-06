@@ -5,8 +5,8 @@ from pendulum import duration
 
 from d3a.util import generate_market_slot_list
 from d3a.models.events import Trigger
-from d3a.models.strategy.base import BaseStrategy
-from d3a.models.strategy.const import ConstSettings
+from d3a.models.strategy import BaseStrategy
+from d3a.models.const import ConstSettings
 from d3a.models.strategy.update_frequency import OfferUpdateFrequencyMixin
 from d3a.models.state import PVState
 
@@ -68,7 +68,7 @@ class PVStrategy(BaseStrategy, OfferUpdateFrequencyMixin):
         return rounded_energy_rate
 
     def event_tick(self, *, area):
-        for market in list(self.area.markets.values()):
+        for market in self.area.all_markets:
             self.decrease_energy_price_over_ticks(market)
 
     def produced_energy_forecast_kWh(self):
@@ -111,7 +111,7 @@ class PVStrategy(BaseStrategy, OfferUpdateFrequencyMixin):
         self.update_market_cycle_offers(self.min_selling_rate)
 
         # Iterate over all markets open in the future
-        for market in self.area.markets.values():
+        for market in self.area.all_markets:
             initial_sell_rate = self.calculate_initial_sell_rate(market.time_slot_str)
             rounded_energy_rate = self._incorporate_rate_restrictions(initial_sell_rate,
                                                                       market.time_slot_str)

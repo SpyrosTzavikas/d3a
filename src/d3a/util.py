@@ -4,6 +4,7 @@ import termios
 import tty
 from logging import LoggerAdapter, getLogger
 import json
+import time
 
 from click.types import ParamType
 from pendulum import duration
@@ -13,7 +14,7 @@ from datetime import timedelta
 
 from d3a import get_project_root
 from d3a import setup as d3a_setup
-from d3a.models.strategy.const import ConstSettings
+from d3a.models.const import ConstSettings
 
 import d3a
 import inspect
@@ -281,3 +282,12 @@ def constsettings_to_dict():
                     else:
                         const_settings[settings_class_name] = {key: value}
     return const_settings
+
+
+def wait_until_timeout_blocking(functor, timeout=10, polling_period=0.01):
+    current_time = 0.0
+    while not functor() and current_time < timeout:
+        start_time = time.time()
+        time.sleep(polling_period)
+        current_time += time.time() - start_time
+    assert functor()

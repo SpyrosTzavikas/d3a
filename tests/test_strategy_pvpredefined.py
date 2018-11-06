@@ -5,9 +5,9 @@ from pendulum import DateTime, duration
 
 from d3a import TIME_ZONE
 from d3a.models.area import DEFAULT_CONFIG
-from d3a.models.market import Offer, Trade
+from d3a.models.market.market_structures import Offer, Trade
 from d3a.models.strategy.predefined_pv import PVPredefinedStrategy
-from d3a.models.strategy.const import ConstSettings
+from d3a.models.const import ConstSettings
 
 
 ENERGY_FORECAST = {}  # type: Dict[Time, float]
@@ -47,8 +47,8 @@ class FakeArea():
         return 30
 
     @property
-    def markets(self):
-        return {TIME: self.test_market}
+    def all_markets(self):
+        return [self.test_market]
 
 
 class FakeMarket:
