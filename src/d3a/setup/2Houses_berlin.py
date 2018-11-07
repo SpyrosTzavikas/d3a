@@ -18,7 +18,6 @@ user_profile_path2 = os.path.join(d3a_path, "resources/House2.csv")
 
 def get_setup(config):
     ConstSettings.IAASettings.MARKET_TYPE = 2
-    ConstSettings.GeneralSettings.DEFAULT_MARKET_MAKER_RATE = 28
     area = Area(
         'Grid', [
             Area('House 1', children=[
