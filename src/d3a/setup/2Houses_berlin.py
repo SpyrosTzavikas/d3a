@@ -12,8 +12,8 @@ import os
 from d3a.models.const import ConstSettings
 
 user_profile_path = os.path.join(d3a_path, "resources/PV_Profile_Summer_5kWp.csv")
-user_profile_path1 = os.path.join(d3a_path, "resources/House1.csv")
-user_profile_path2 = os.path.join(d3a_path, "resources/House2.csv")
+user_profile_path1 = os.path.join(d3a_path, "resources/House_1.csv")
+user_profile_path2 = os.path.join(d3a_path, "resources/House_2.csv")
 
 
 def get_setup(config):
