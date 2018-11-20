@@ -54,28 +54,29 @@ def get_setup(config):
     heatpump_profiles = {}
     dishwasher_profiles = {}
     washingmachine_profiles = {}
+    unaccounted_loads = {}
     proposition = {}
 
     list_of_second_level_areas = []
 
     for house in stedin_dict:
-        # house 1 id = 1 (not 0)
-        # print(house, 'max HP', max(stedin_dict[house]['HP']))
-        # print(house, 'max PV', max(stedin_dict[house]['PV']))
-
-        # hack for taking only hours:minutes from the date-time-stamp
+        sim_length = 96
+        # includes a hack for taking only 'hours:minutes' from the date-time-stamp string
         pv_profiles[house] = \
             {stedin_dict[house]['DateTime'][i][11:16]:
-             stedin_dict[house]['PV'][i]*3 for i in range(96)}
+             stedin_dict[house]['PV'][i]*3 for i in range(sim_length)}
         heatpump_profiles[house] = \
             {stedin_dict[house]['DateTime'][i][11:16]:
-             stedin_dict[house]['HP'][i] for i in range(96)}
+             stedin_dict[house]['HP'][i] for i in range(sim_length)}
         dishwasher_profiles[house] = \
             {stedin_dict[house]['DateTime'][i][11:16]:
-             stedin_dict[house]['DW'][i] for i in range(96)}
+             stedin_dict[house]['DW'][i] for i in range(sim_length)}
         washingmachine_profiles[house] = \
             {stedin_dict[house]['DateTime'][i][11:16]:
-             stedin_dict[house]['WM'][i] for i in range(96)}
+             stedin_dict[house]['WM'][i] for i in range(sim_length)}
+        unaccounted_loads[house] = \
+            {stedin_dict[house]['DataTime'][i][11:16]:
+             stedin_dict[house]['UL'][i] for i in range(sim_length)}
         proposition[house] = stedin_dict[house]['proposition'][0]
 
         """     ZIH: PV & Battery
