@@ -171,11 +171,10 @@ class ExportAndPlot:
         """
         Wrapper for _plot_trade_partner_cell_tower
         """
-        key = "cell-tower"
         new_subdir = os.path.join(subdir, area.slug)
         for child in area.children:
-            if child.slug == key:
-                self._plot_trade_partner_cell_tower(child.slug, subdir)
+            # if child.slug == key:
+            self._plot_trade_partner_cell_tower(child.slug, new_subdir)
             if child.children:
                 self.plot_trade_partner_cell_tower(child, new_subdir)
 
