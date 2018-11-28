@@ -126,7 +126,7 @@ def _is_prosumer_node(area):
 
 def _accumulate_load_trades(load, grid, accumulated_trades):
     accumulated_trades[load.name] = {
-        "type": load.name,
+        "type": load,
         "id": load.area_id,
         "produced": 0.0,
         "earned": 0.0,
@@ -144,7 +144,7 @@ def _accumulate_load_trades(load, grid, accumulated_trades):
 
 def _accumulate_producer_trades(load, grid, accumulated_trades):
     accumulated_trades[load.name] = {
-        "type": load.name,
+        "type": load,
         "id": load.area_id,
         "produced": 0.0,
         "earned": 0.0,
@@ -161,7 +161,7 @@ def _accumulate_producer_trades(load, grid, accumulated_trades):
 
 def _accumulate_prosumer_trades(load, grid, accumulated_trades):
     accumulated_trades[load.name] = {
-        "type": load.name,
+        "type": load,
         "id": load.area_id,
         "produced": 0.0,
         "earned": 0.0,
@@ -183,7 +183,7 @@ def _accumulate_prosumer_trades(load, grid, accumulated_trades):
 def _accumulate_house_trades(house, grid, accumulated_trades, past_market_types):
     if house.name not in accumulated_trades:
         accumulated_trades[house.name] = {
-            "type": house.name,
+            "type": house,
             "id": house.area_id,
             "produced": 0.0,
             "earned": 0.0,
@@ -261,7 +261,8 @@ def _generate_produced_energy_entries(accumulated_trades):
         "target": area_name,
         "label": f"{area_name} Produced {str(round(abs(area_data['produced']), 3))} kWh",
         "priceLabel": f"{area_name} Earned {str(round(abs(area_data['earned']), 3))} cents",
-    } for area_name, area_data in accumulated_trades.items()]
+    } for area_name, area_data in accumulated_trades.items()
+        if _is_producer_node(area_data['type'])]
     return sorted(produced_energy, key=lambda a: a["x"])
 
 
@@ -269,6 +270,9 @@ def _generate_self_consumption_entries(accumulated_trades):
     # Create self consumed energy results (positive axis, first entries)
     self_consumed_energy = []
     for area_name, area_data in accumulated_trades.items():
+        if _is_load_node(area_data['type']) or _is_producer_node(area_data['type']) or \
+                _is_prosumer_node(area_data['type']):
+            continue
         sc_energy = 0
         sc_money = 0
         if area_name in area_data["consumedFrom"].keys():
@@ -319,13 +323,29 @@ def _generate_intraarea_consumption_entries(accumulated_trades):
     return consumption_rows
 
 
+def _area_agent_type(accumulated_trades):
+    area_type = {"producer": [], "consumer": [],
+                 "prosumer": [], "AreaAgent": []}
+
+    for i in accumulated_trades.values():
+        if _is_producer_node(i['type']):
+            area_type["producer"].append(i['type'].name)
+        elif _is_load_node(i['type']):
+            area_type["consumer"].append(i['type'].name)
+        elif _is_prosumer_node(i['type']):
+            area_type["prosumer"].append(i['type'].name)
+        elif _is_house_node(i['type']):
+            area_type["AreaAgent"].append(i['type'].name)
+    return area_type
+
+
 def export_cumulative_grid_trades(area, past_market_types, all_devices=False):
     accumulated_trades = _accumulate_grid_trades_all_devices(area, {}, past_market_types) \
         if all_devices \
         else _accumulate_grid_trades(area, {}, past_market_types)
     return {
         "unit": "kWh",
-        "areas": sorted(accumulated_trades.keys()),
+        "areas": _area_agent_type(accumulated_trades),
         "cumulative-grid-trades": [
             # Append first produced energy for all areas
             _generate_produced_energy_entries(accumulated_trades),
@@ -333,7 +353,6 @@ def export_cumulative_grid_trades(area, past_market_types, all_devices=False):
             _generate_self_consumption_entries(accumulated_trades),
             # Then consumption entries for intra-house trades
             *_generate_intraarea_consumption_entries(accumulated_trades)]
-
     }
 
 
